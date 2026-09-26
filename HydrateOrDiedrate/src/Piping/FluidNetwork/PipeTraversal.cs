@@ -272,7 +272,6 @@ namespace HydrateOrDiedrate.Piping.FluidNetwork
         public static List<(BlockPos pos, int distance)> TryFindWellSpring(
             IWorldAccessor world,
             BlockPos start,
-            out BlockEntityWellSpring well,
             int maxVisited = 4096)
         {
             return TryFindWellSpring(world, start, BlockFacing.DOWN, out well, maxVisited);
@@ -282,34 +281,20 @@ namespace HydrateOrDiedrate.Piping.FluidNetwork
             IWorldAccessor world,
             BlockPos start,
             BlockFacing startFace,
-            out BlockEntityWellSpring well,
             int maxVisited = 4096)
         {
-            well = null;
-            BlockEntityWellSpring found = null;
 
-            List<(BlockPos pos, int distance)> targets = PipeTraversal.TryFind(
+            return PipeTraversal.FindAll(
                 world,
                 start,
                 startFace,
                 (w, p, block) =>
                 {
                     var be = w.BlockAccessor.GetBlockEntity(p);
-                    if (be is BlockEntityWellSpring ws)
-                    {
-                        found = ws;
-                        return true;
-                    }
-
-                    return false;
+                    return be is BlockEntityWellSpring;
                 },
                 maxVisited
             );
-
-            if (!ok || found == null) return false;
-
-            well = found;
-            return true;
         }
     }
 }
