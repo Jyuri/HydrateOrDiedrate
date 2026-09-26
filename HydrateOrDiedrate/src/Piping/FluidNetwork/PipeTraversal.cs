@@ -274,7 +274,7 @@ namespace HydrateOrDiedrate.Piping.FluidNetwork
             BlockPos start,
             int maxVisited = 4096)
         {
-            return TryFindWellSpring(world, start, BlockFacing.DOWN, out well, maxVisited);
+            return TryFindWellSpring(world, start, BlockFacing.DOWN, maxVisited);
         }
 
         public static List<(BlockPos pos, int distance)> TryFindWellSpring(
