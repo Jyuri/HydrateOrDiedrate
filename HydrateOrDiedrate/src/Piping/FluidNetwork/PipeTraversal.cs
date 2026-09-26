@@ -112,7 +112,7 @@ namespace HydrateOrDiedrate.Piping.FluidNetwork
             Vintagestory.API.Common.Func<IWorldAccessor, BlockPos, Block, bool> matchNonPipe,
             int maxVisited = 2048)
         {
-            List<BlockPos> targets = new List<BlockPos>;
+            List<BlockPos> targets = new List<BlockPos>();
             if (world == null || startPos == null || matchNonPipe == null)
                 return targets;
 
@@ -162,7 +162,7 @@ namespace HydrateOrDiedrate.Piping.FluidNetwork
                             continue;
                         }
                         if (matchNonPipe(world, nextPos, nextBlock))
-                            targets.Add(cur.Pos);
+                            targets.Add(nextPos.Copy());
                     }
                 }
             }
