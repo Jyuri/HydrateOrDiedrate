@@ -42,7 +42,8 @@ namespace HydrateOrDiedrate.Piping.HandPump
         private static readonly AssetLocation pumpSfx = new AssetLocation("hydrateordiedrate", "sounds/pump1.ogg");
         private bool pumping;
         private HandPumpContainerRenderer containerRenderer;
-        private BlockEntityWellSpring currentSpring;
+        private BlockEntityWellSpring currentSpring;        // Will be removed after target integration
+        private List<(BlockPos pos, int distance)> currentTargets;
         private int lastNetworkVersion = -1;
 
         private BEBehaviorHandPumpAnim AnimBh => this.GetBehavior<BEBehaviorHandPumpAnim>();
@@ -522,11 +523,33 @@ namespace HydrateOrDiedrate.Piping.HandPump
             return Math.Max(0, distance / blocksPerStroke);
         }
 
-        private BlockEntityWellSpring FindWellViaNetwork()
+        private List<(BlockPos pos, int distance)> FindWellViaNetwork()
         {
-            return FluidSearch.TryFindWellSpring(Api.World, Pos, out var found, maxVisited: 4096)
-                ? found
-                : null;
+            return FluidSearch.TryFindWellSpring(Api.World, Pos, maxVisited: 4096)
+        }
+
+        private mergeNetworkWells(List<(BlockPos pos, int distance)>)
+        {
+            // For GetBlockInfo, so a simple "single well" UI can be used to represent the network.
+        }
+
+        private List<(BlockPos pos, int distance)> GetOrFindMultiSpring()
+        {
+            if (Api?.World == null) return null;
+
+            int curVersion = FluidNetworkState.NetworkVersion;
+            
+            if (currentTargets != null && lastNetworkVersion == curVersion)
+            {
+                var be = Api.World.BlockAccessor.GetBlockEntity(currentSpring.Pos) as BlockEntityWellSpring;        // I'm not sure how to remove this quite yet
+                if (be == currentSpring)                                                                            // Same for this
+                {
+                    return currentTargets;
+                }
+            }
+            currentTargets = FindWellViaNetwork();
+            lastNetworkVersion = curVersion;
+            return currentTargets;
         }
 
         private BlockEntityWellSpring GetOrFindSpring()
