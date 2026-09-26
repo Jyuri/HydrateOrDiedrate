@@ -105,6 +105,70 @@ namespace HydrateOrDiedrate.Piping.FluidNetwork
 
             return false;
         }
+        public static bool FindAll(
+            IWorldAccessor world,
+            BlockPos startPos,
+            BlockFacing startCameFrom,
+            Vintagestory.API.Common.Func<IWorldAccessor, BlockPos, Block, bool> matchNonPipe,
+            int maxVisited = 2048)
+        {
+            if (world == null || startPos == null || matchNonPipe == null)
+                return false;
+
+            var q = new Queue<EdgeState>();
+            var seen = new HashSet<EdgeState>();
+            var start = new EdgeState(startPos.Copy(), startCameFrom);
+            List<BlockPos> targets = new List<BlockPos>;
+
+            q.Enqueue(start);
+            seen.Add(start);
+
+            var blockAccessor = world.BlockAccessor;
+            var nextPos = startPos.Copy();
+
+            while (q.Count > 0 && seen.Count <= maxVisited)
+            {
+                var cur = q.Dequeue();
+                var curBlock = blockAccessor.GetBlock(cur.Pos);
+                if (!(curBlock is IFluidBlock) && matchNonPipe(world, cur.Pos, curBlock))
+                    targets.Add(cur.Pos);
+
+                foreach (var dir in BlockFacing.ALLFACES)
+                {
+                    if (!HasConnector(curBlock, world, cur.Pos, dir)) continue;
+                    if (!AllowsPassageThrough(curBlock, world, cur.Pos, cur.CameFrom, dir)) continue;
+                    nextPos.Set(cur.Pos).Add(dir);
+
+                    var nextBlock = blockAccessor.GetBlock(nextPos);
+
+                    if (nextBlock is IFluidBlock)
+                    {
+                        if (!HasConnector(nextBlock, world, nextPos, dir.Opposite)) continue;
+
+                        if (nextBlock is IFluidGate pipeGate &&
+                            !pipeGate.AllowsFluidPassage(world, nextPos, dir.Opposite, dir))
+                        {
+                            continue;
+                        }
+                        var next = new EdgeState(nextPos.Copy(), dir.Opposite);
+                        if (!seen.Add(next)) continue;
+                        q.Enqueue(next);
+                    }
+                    else
+                    {
+                        if (nextBlock is IFluidGate entryGate &&
+                            !entryGate.AllowsFluidPassage(world, nextPos, dir.Opposite, dir))
+                        {
+                            continue;
+                        }
+                        if (matchNonPipe(world, nextPos, nextBlock))
+                            return true;
+                    }
+                }
+            }
+
+            return false;
+        }
 
         public static int Distance(
             IWorldAccessor world,
