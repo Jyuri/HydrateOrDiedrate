@@ -131,7 +131,7 @@ namespace HydrateOrDiedrate.Piping.FluidNetwork
                 var (cur, distance) = q.Dequeue();
                 var curBlock = blockAccessor.GetBlock(cur.Pos);
                 if (!(curBlock is IFluidBlock) && matchNonPipe(world, cur.Pos, curBlock))
-                    targets.Add(cur.Pos, distance);
+                    targets.Add((cur.Pos, distance));
 
                 foreach (var dir in BlockFacing.ALLFACES)
                 {
