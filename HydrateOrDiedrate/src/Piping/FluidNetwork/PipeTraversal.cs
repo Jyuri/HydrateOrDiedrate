@@ -105,20 +105,20 @@ namespace HydrateOrDiedrate.Piping.FluidNetwork
 
             return false;
         }
-        public static bool FindAll(
+        public static List<BlockPos> FindAll(
             IWorldAccessor world,
             BlockPos startPos,
             BlockFacing startCameFrom,
             Vintagestory.API.Common.Func<IWorldAccessor, BlockPos, Block, bool> matchNonPipe,
             int maxVisited = 2048)
         {
+            List<BlockPos> targets = new List<BlockPos>;
             if (world == null || startPos == null || matchNonPipe == null)
-                return false;
+                return targets;
 
             var q = new Queue<EdgeState>();
             var seen = new HashSet<EdgeState>();
             var start = new EdgeState(startPos.Copy(), startCameFrom);
-            List<BlockPos> targets = new List<BlockPos>;
 
             q.Enqueue(start);
             seen.Add(start);
@@ -162,12 +162,12 @@ namespace HydrateOrDiedrate.Piping.FluidNetwork
                             continue;
                         }
                         if (matchNonPipe(world, nextPos, nextBlock))
-                            return true;
+                            targets.Add(cur.Pos);
                     }
                 }
             }
 
-            return false;
+            return targets;
         }
 
         public static int Distance(
