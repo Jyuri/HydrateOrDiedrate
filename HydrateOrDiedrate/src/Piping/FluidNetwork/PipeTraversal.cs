@@ -105,22 +105,22 @@ namespace HydrateOrDiedrate.Piping.FluidNetwork
 
             return false;
         }
-        public static List<BlockPos pos, int distance> FindAll(
+        public static List<(BlockPos pos, int distance)> FindAll(
             IWorldAccessor world,
             BlockPos startPos,
             BlockFacing startCameFrom,
             Vintagestory.API.Common.Func<IWorldAccessor, BlockPos, Block, bool> matchNonPipe,
             int maxVisited = 2048)
         {
-            List<BlockPos> targets = new List<BlockPos pos, int distance>();
+            List<(BlockPos pos, int distance)> targets = new List<(BlockPos pos, int distance)>();
             if (world == null || startPos == null || matchNonPipe == null)
                 return targets;
 
-            var q = new Queue<EdgeState st, int distance>();
+            var q = new Queue<(EdgeState st, int distance)>();
             var seen = new HashSet<EdgeState>();
             var start = new EdgeState(startPos.Copy(), startCameFrom);
 
-            q.Enqueue(start, 1);
+            q.Enqueue((start, 1));
             seen.Add(start);
 
             var blockAccessor = world.BlockAccessor;
@@ -128,7 +128,7 @@ namespace HydrateOrDiedrate.Piping.FluidNetwork
 
             while (q.Count > 0 && seen.Count <= maxVisited)
             {
-                var cur distance = q.Dequeue();
+                var (cur, distance) = q.Dequeue();
                 var curBlock = blockAccessor.GetBlock(cur.Pos);
                 if (!(curBlock is IFluidBlock) && matchNonPipe(world, cur.Pos, curBlock))
                     targets.Add(cur.Pos, distance);
@@ -152,7 +152,7 @@ namespace HydrateOrDiedrate.Piping.FluidNetwork
                         }
                         var next = new EdgeState(nextPos.Copy(), dir.Opposite);
                         if (!seen.Add(next)) continue;
-                        q.Enqueue(next, distance+1);
+                        q.Enqueue((next, distance+1));
                     }
                     else
                     {
@@ -162,7 +162,7 @@ namespace HydrateOrDiedrate.Piping.FluidNetwork
                             continue;
                         }
                         if (matchNonPipe(world, nextPos, nextBlock))
-                            targets.Add(nextPos.Copy(), distance+1);
+                            targets.Add((nextPos.Copy(), distance+1));
                     }
                 }
             }
