@@ -269,7 +269,7 @@ namespace HydrateOrDiedrate.Piping.FluidNetwork
 
     public static class FluidSearch
     {
-        public static bool TryFindWellSpring(
+        public static List<(BlockPos pos, int distance)> TryFindWellSpring(
             IWorldAccessor world,
             BlockPos start,
             out BlockEntityWellSpring well,
@@ -278,7 +278,7 @@ namespace HydrateOrDiedrate.Piping.FluidNetwork
             return TryFindWellSpring(world, start, BlockFacing.DOWN, out well, maxVisited);
         }
 
-        public static bool TryFindWellSpring(
+        public static List<(BlockPos pos, int distance)> TryFindWellSpring(
             IWorldAccessor world,
             BlockPos start,
             BlockFacing startFace,
@@ -288,7 +288,7 @@ namespace HydrateOrDiedrate.Piping.FluidNetwork
             well = null;
             BlockEntityWellSpring found = null;
 
-            bool ok = PipeTraversal.TryFind(
+            List<(BlockPos pos, int distance)> targets = PipeTraversal.TryFind(
                 world,
                 start,
                 startFace,
