@@ -120,7 +120,7 @@ namespace HydrateOrDiedrate.Piping.FluidNetwork
             var seen = new HashSet<EdgeState>();
             var start = new EdgeState(startPos.Copy(), startCameFrom);
 
-            q.Enqueue((start, 1));
+            q.Enqueue((start, 0));
             seen.Add(start);
 
             var blockAccessor = world.BlockAccessor;
