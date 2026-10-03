@@ -574,10 +574,12 @@ namespace HydrateOrDiedrate.Piping.HandPump
                 totalDistance += distance;
             }
             if (totalDistance == 0) return 0;
+
+            float weightStep = 1 / (float)totalDistance;
             List<(BlockPos pos, float percentPull)> wheightedSprings = new List<(BlockPos pos, float percentPull)>();
             foreach (var (pos, distance) in springs)
             {
-                float percentPull = (float)distance / totalDistance;
+                float percentPull = 1 - (distance * weightStep);
                 wheightedSprings.Add((pos, percentPull));
             }
 
@@ -587,6 +589,8 @@ namespace HydrateOrDiedrate.Piping.HandPump
                 /// There needs to be a check to see if any of the wells have tainted water.
                 /// I propose that if any well has tainted water, then any water pulled from the
                 /// network will also be tainted. May encourage players to use shutoff valves.
+                
+                float i = remaining;
                 foreach (var (pos, percentPull) in wheightedSprings)
                 {
                     var be = Api.World.BlockAccessor.GetBlockEntity(pos) as BlockEntityWellSpring;
@@ -594,11 +598,11 @@ namespace HydrateOrDiedrate.Piping.HandPump
 
                     /// There might be an issue with weird rounding errors and float values. May
                     /// need to fix...
-                    float pulled = be.TryChangeVolume(-litresToPull * percentPull);
+                    float pulled = -be.TryChangeVolume((float)Math.Round(-litresToPull * percentPull, 1));
                     remaining -= pulled;
-
                     if (remaining <= 0f) break;
                 }
+                if (i - remaining < 0.1f) break;
             }
 
             return litresToPull - remaining;
