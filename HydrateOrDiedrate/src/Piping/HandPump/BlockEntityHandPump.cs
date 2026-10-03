@@ -178,7 +178,7 @@ namespace HydrateOrDiedrate.Piping.HandPump
 
             if (remainingPrimingStrokes <= 0)
             {
-                var spring = GetOrFindSpring();
+                var spring = GetOrFindSpring(); 
                 if (spring != null)
                 {
                     int wholeLitresThisStroke = Math.Max(0, (int)Math.Floor(LitresPerProductiveStroke));
@@ -526,6 +526,82 @@ namespace HydrateOrDiedrate.Piping.HandPump
         private List<(BlockPos pos, int distance)> FindWellViaNetwork()
         {
             return FluidSearch.TryFindWellSpring(Api.World, Pos, maxVisited: 4096);
+        }
+
+
+        private bool AreSpringsValid(List<(BlockPos pos, int distance)> springs)
+        {
+            if (springs == null || springs.Count == 0) return false;
+
+            foreach (var (pos, _) in springs)
+            {
+                var be = Api.World.BlockAccessor.GetBlockEntity(pos) as BlockEntityWellSpring;
+                if (be is null) return false;
+            }
+
+            return true;
+        }
+
+        private int ComputeNetworkPrimingStrokes(IWorldAccessor world, BlockPos start, List<(BlockPos pos, int distance)> springs)
+        {
+            if (world == null || start == null || springs == null || springs.Count == 0) return 0;
+
+            int avgDistance = 0;
+            foreach (var (_, distance) in springs)
+            {
+                avgDistance += distance;
+            }
+            avgDistance /= springs.Count;
+
+            if (avgDistance <= 0) return 0;
+            if (!ModConfig.Instance.Pump.HandPumpEnablePriming) return 0;
+            int blocksPerStroke = ModConfig.Instance.Pump.HandPumpPrimingBlocksPerStroke;
+            if (blocksPerStroke <= 0)
+            {
+                blocksPerStroke = 3;
+            }
+            return Math.Max(0, avgDistance / blocksPerStroke);
+        }
+
+        private float PullWaterFromNetwork(List<(BlockPos pos, int distance)> springs, float litresToPull)
+        {
+            if (springs == null || springs.Count == 0) return 0;
+            if (!AreSpringsValid(springs)) return 0;
+
+            int totalDistance = 0;
+            foreach (var (_, distance) in springs)
+            {
+                totalDistance += distance;
+            }
+            if (totalDistance == 0) return 0;
+            List<(BlockPos pos, float percentPull)> wheightedSprings = new List<(BlockPos pos, float percentPull)>();
+            foreach (var (pos, distance) in springs)
+            {
+                float percentPull = (float)distance / totalDistance;
+                wheightedSprings.Add((pos, percentPull));
+            }
+
+            float remaining = litresToPull;
+            while (remaining > 0f)
+            {
+                /// There needs to be a check to see if any of the wells have tainted water.
+                /// I propose that if any well has tainted water, then any water pulled from the
+                /// network will also be tainted. May encourage players to use shutoff valves.
+                foreach (var (pos, percentPull) in wheightedSprings)
+                {
+                    var be = Api.World.BlockAccessor.GetBlockEntity(pos) as BlockEntityWellSpring;
+                    if (be is null) continue;
+
+                    /// There might be an issue with weird rounding errors and float values. May
+                    /// need to fix...
+                    float pulled = be.TryChangeVolume(-litresToPull * percentPull);
+                    remaining -= pulled;
+
+                    if (remaining <= 0f) break;
+                }
+            }
+
+            return litresToPull - remaining;
         }
 
 
