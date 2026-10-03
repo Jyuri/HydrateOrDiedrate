@@ -528,10 +528,6 @@ namespace HydrateOrDiedrate.Piping.HandPump
             return FluidSearch.TryFindWellSpring(Api.World, Pos, maxVisited: 4096);
         }
 
-        private mergeNetworkWells(List<(BlockPos pos, int distance)>)
-        {
-            // For GetBlockInfo, so a simple "single well" UI can be used to represent the network.
-        }
 
         private List<(BlockPos pos, int distance)> GetOrFindMultiSpring()
         {
@@ -541,11 +537,7 @@ namespace HydrateOrDiedrate.Piping.HandPump
             
             if (currentTargets != null && lastNetworkVersion == curVersion)
             {
-                var be = Api.World.BlockAccessor.GetBlockEntity(currentSpring.Pos) as BlockEntityWellSpring;        // I'm not sure how to remove this quite yet
-                if (be == currentSpring)                                                                            // Same for this
-                {
-                    return currentTargets;
-                }
+                return currentTargets;
             }
             currentTargets = FindWellViaNetwork();
             lastNetworkVersion = curVersion;
