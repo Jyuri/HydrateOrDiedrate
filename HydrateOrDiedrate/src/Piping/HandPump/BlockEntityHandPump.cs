@@ -114,10 +114,10 @@ namespace HydrateOrDiedrate.Piping.HandPump
             strokeInProgress = false;
             lastSecondsUsed = 0f;
 
-            var spring = GetOrFindSpring();
+            List<(BlockPos pos, int distance)> springs = GetOrFindMultiSpring();
             RefreshPrimeDecay();
 
-            int required = spring != null ? ComputePrimingStrokes(Api.World, Pos, spring.Pos) : 0;
+            int required = springs != null && springs.Count > 0 ? ComputeNetworkPrimingStrokes(Api.World, Pos, springs) : 0;
             int effectivePrime = GetEffectivePrimeInt(required);
             remainingPrimingStrokes = Math.Max(0, required - effectivePrime);
 
@@ -143,7 +143,7 @@ namespace HydrateOrDiedrate.Piping.HandPump
             if (Api.Side != EnumAppSide.Server) return true;
             if (PumpingPlayer == null || ContainerSlot.Empty) return false;
             if (ContainerSlot.Itemstack?.Collectible is not BlockLiquidContainerTopOpened cont) return false;
-            var spring = GetOrFindSpring();
+            List<(BlockPos pos, int distance)> springs = GetOrFindMultiSpring();
 
             if (!strokeInProgress)
             {
@@ -160,7 +160,7 @@ namespace HydrateOrDiedrate.Piping.HandPump
             if (strokeTimer >= StrokePeriodSec)
             {
                 strokeTimer -= StrokePeriodSec;
-                CompleteStroke(cont, spring);
+                CompleteStroke(cont, springs);
                 StartStroke();
             }
 
@@ -178,8 +178,8 @@ namespace HydrateOrDiedrate.Piping.HandPump
 
             if (remainingPrimingStrokes <= 0)
             {
-                var spring = GetOrFindSpring(); 
-                if (spring != null)
+                var springs = GetOrFindMultiSpring();
+                if (springs != null && springs.Count > 0)
                 {
                     int wholeLitresThisStroke = Math.Max(0, (int)Math.Floor(LitresPerProductiveStroke));
                     if (wholeLitresThisStroke > 0 && ContainerSlot.Itemstack?.Collectible is BlockLiquidContainerBase cont)
@@ -190,6 +190,8 @@ namespace HydrateOrDiedrate.Piping.HandPump
                         var existing = cont.GetContent(ContainerSlot.Itemstack);
                         var filter = existing?.Collectible;
 
+
+                        /// Change to allow for multi-spring extraction.
                         bool canMatchFilter = filter == null || (spring.WaterItem == filter);
                         bool canExtract = spring.TotalLiters > 0 && canMatchFilter && freeLitres > 0;
                         willExtractLitresThisStroke = canExtract ? wholeLitresThisStroke : 0;
@@ -204,7 +206,7 @@ namespace HydrateOrDiedrate.Piping.HandPump
             }
         }
 
-        private void CompleteStroke(BlockLiquidContainerTopOpened cont, BlockEntityWellSpring spring)
+        private void CompleteStroke(BlockLiquidContainerTopOpened cont, List<(BlockPos pos, int distance)> springs)
         {
             strokeInProgress = false;
             if (Api.Side == EnumAppSide.Server)
@@ -217,8 +219,8 @@ namespace HydrateOrDiedrate.Piping.HandPump
             if (remainingPrimingStrokes > 0)
             {
                 remainingPrimingStrokes--;
-                var springNow = spring ?? GetOrFindSpring();
-                int requiredNow = springNow != null ? ComputePrimingStrokes(Api.World, Pos, springNow.Pos) : 0;
+                var springsNow = springs ?? GetOrFindMultiSpring(); /// Needs changes.
+                int requiredNow = springsNow != null ? ComputeNetworkPrimingStrokes(Api.World, Pos, springsNow) : 0;
                 primeLevel = Math.Min(requiredNow, primeLevel + 1f);
 
                 primeLastHours = Api.World.Calendar.TotalHours;
@@ -229,7 +231,7 @@ namespace HydrateOrDiedrate.Piping.HandPump
 
             int wholeLitresThisStroke = Math.Max(0, (int)Math.Floor(LitresPerProductiveStroke));
             if (wholeLitresThisStroke <= 0) return;
-            if (spring == null) return;
+            if (springs == null || springs.Count == 0) return;
 
             if (willExtractLitresThisStroke <= 0) return;
 
@@ -242,6 +244,7 @@ namespace HydrateOrDiedrate.Piping.HandPump
             int requestTotal = Math.Min(willExtractLitresThisStroke, wholeLitresThisStroke);
             int toStore = 0;
 
+            /// Needs to be replaced by multi-spring check.
             if(filter is not null && (spring.WaterItem != filter)) return;
             
             if (freeLitres > 0) toStore = Math.Min(requestTotal, freeLitres);
@@ -251,6 +254,7 @@ namespace HydrateOrDiedrate.Piping.HandPump
             float litresStored = 0;
             float litresWasted = 0;
 
+            /// Also needs to be replaced. Likely by a new method that handles multi-spring extraction.
             if (toStore > 0)
             {
                 var stackStored = spring.TryTakeContentLiters(spring.Pos, toStore);
@@ -608,6 +612,65 @@ namespace HydrateOrDiedrate.Piping.HandPump
             return litresToPull - remaining;
         }
 
+        private string WellNetworkPollution(List<(BlockPos pos, int distance)> springs) /// I'm getting a little lost now...
+        {
+            if (springs == null || springs.Count == 0) return null;
+            if (!AreSpringsValid(springs)) return null;
+
+            string pollutionType = null;
+            foreach (var (pos, _) in springs)
+            {
+                var be = Api.World.BlockAccessor.GetBlockEntity(pos) as BlockEntityWellSpring;
+                if (be is null) continue;
+
+                var props = be.GetContentProps(pos);
+                if (props is null) continue;
+
+                if (props.PollutionType == "poisoned")
+                {
+                    pollutionType = "poisoned";
+                    break;
+                }
+                else if (props.PollutionType == "contaminated")
+                {
+                    pollutionType = "contaminated";
+                }
+                else if (props.PollutionType == "clean" && pollutionType != "contaminated")
+                {
+                    pollutionType = "clean";
+                }
+                else
+                {
+                    pollutionType = null;
+                }
+                var pollutionType = props.PollutionType;
+            }
+
+            return pollutionType;
+        }
+
+        private ItemStack FillContainerFromNetwork(List<(BlockPos pos, int distance)> springs, BlockLiquidContainerTopOpened cont, int litresToFill)
+        {
+            if (springs == null || springs.Count == 0) return null;
+            if (!AreSpringsValid(springs)) return null;
+
+            float pulledLitres = PullWaterFromNetwork(springs, litresToFill);
+            if (pulledLitres <= 0f) return null;
+
+            /// Very lost...
+            var props = WellNetworkPollution(springs);
+            if (props is null) return null;
+
+            int itemsToAdd = (int)Math.Round(pulledLitres * props.ItemsPerLitre);
+            var stack = new ItemStack(props.Collectible, itemsToAdd);
+
+            cont.SetContent(ContainerSlot.Itemstack, stack);
+            ContainerSlot.MarkDirty();
+            MarkDirty();
+
+            return stack;
+        }
+
 
         private List<(BlockPos pos, int distance)> GetOrFindMultiSpring()
         {
@@ -624,7 +687,7 @@ namespace HydrateOrDiedrate.Piping.HandPump
             return currentTargets;
         }
 
-        private BlockEntityWellSpring GetOrFindSpring()
+        private BlockEntityWellSpring GetOrFindSpring() /// Legacy Code.
         {
             if (Api?.World == null) return null;
 
@@ -714,7 +777,7 @@ namespace HydrateOrDiedrate.Piping.HandPump
             if (ModConfig.Instance.GroundWater.ShowOutputInfo)
             {
                 dsc.AppendLine();
-                foundSpring = GetOrFindSpring();
+                foundSpring = GetOrFindSpring(); /// Needs changes.
                 if (foundSpring is null)
                 {
                     dsc.AppendLine(Lang.Get("hydrateordiedrate:pump.noSpring"));
@@ -729,7 +792,7 @@ namespace HydrateOrDiedrate.Piping.HandPump
             if (!ModConfig.Instance.Pump.HandPumpEnablePriming || !ModConfig.Instance.Pump.ShowPrimingStrokes) return;
             RefreshPrimeDecay();
 
-            foundSpring ??= GetOrFindSpring();
+            foundSpring ??= GetOrFindSpring(); /// Needs changes.
             if(foundSpring is null) return;
             int required = ComputePrimingStrokes(Api.World, Pos, foundSpring.Pos);
 
