@@ -612,12 +612,13 @@ namespace HydrateOrDiedrate.Piping.HandPump
             return litresToPull - remaining;
         }
 
-        private string WellNetworkPollution(List<(BlockPos pos, int distance)> springs) /// I'm getting a little lost now...
+        private string WellNetworkPollution(List<(BlockPos pos, int distance)> springs)
         {
             if (springs == null || springs.Count == 0) return null;
             if (!AreSpringsValid(springs)) return null;
 
             string pollutionType = null;
+            float pollutionLevel = 0f;
             foreach (var (pos, _) in springs)
             {
                 var be = Api.World.BlockAccessor.GetBlockEntity(pos) as BlockEntityWellSpring;
@@ -628,22 +629,29 @@ namespace HydrateOrDiedrate.Piping.HandPump
 
                 if (props.PollutionType == "poisoned")
                 {
-                    pollutionType = "poisoned";
-                    break;
+                    pollutionLevel += 5f;
                 }
                 else if (props.PollutionType == "contaminated")
                 {
-                    pollutionType = "contaminated";
+                    pollutionLevel += 2f;
                 }
-                else if (props.PollutionType == "clean" && pollutionType != "contaminated")
+                else if (props.PollutionType == "clean")
                 {
-                    pollutionType = "clean";
+                    pollutionLevel += 0f;
                 }
-                else
-                {
-                    pollutionType = null;
-                }
-                var pollutionType = props.PollutionType;
+            }
+
+            if (pollutionLevel >= 5f)
+            {
+                pollutionType = "poisoned";
+            }
+            else if (pollutionLevel >= 2f)
+            {
+                pollutionType = "contaminated";
+            }
+            else
+            {
+                pollutionType = "clean";
             }
 
             return pollutionType;
@@ -654,12 +662,11 @@ namespace HydrateOrDiedrate.Piping.HandPump
             if (springs == null || springs.Count == 0) return null;
             if (!AreSpringsValid(springs)) return null;
 
-            float pulledLitres = PullWaterFromNetwork(springs, litresToFill);
-            if (pulledLitres <= 0f) return null;
-
-            /// Very lost...
             var props = WellNetworkPollution(springs);
             if (props is null) return null;
+
+            float pulledLitres = PullWaterFromNetwork(springs, litresToFill);
+            if (pulledLitres <= 0f) return null;
 
             int itemsToAdd = (int)Math.Round(pulledLitres * props.ItemsPerLitre);
             var stack = new ItemStack(props.Collectible, itemsToAdd);
@@ -669,6 +676,78 @@ namespace HydrateOrDiedrate.Piping.HandPump
             MarkDirty();
 
             return stack;
+
+
+            /// This was just copied from legacy code. Needs to be integrated here.
+            int wholeLitresThisStroke = Math.Max(0, (int)Math.Floor(LitresPerProductiveStroke));
+            if (wholeLitresThisStroke <= 0) return;
+            if (springs == null || springs.Count == 0) return;
+
+            if (willExtractLitresThisStroke <= 0) return;
+
+            float curL = cont.GetCurrentLitres(ContainerSlot.Itemstack);
+            int freeLitres = (int)Math.Floor(Math.Max(0f, cont.CapacityLitres - curL));
+
+            var existing = cont.GetContent(ContainerSlot.Itemstack);
+            var filter = existing?.Collectible;
+
+            int requestTotal = Math.Min(willExtractLitresThisStroke, wholeLitresThisStroke);
+            int toStore = 0;
+
+            /// Needs to be replaced by multi-spring check.
+            if(filter is not null && (spring.WaterItem != filter)) return;
+            
+            if (freeLitres > 0) toStore = Math.Min(requestTotal, freeLitres);
+
+            float toWaste = requestTotal - toStore;
+
+            float litresStored = 0;
+            float litresWasted = 0;
+
+            /// Also needs to be replaced. Likely by a new method that handles multi-spring extraction.
+            if (toStore > 0)
+            {
+                var stackStored = spring.TryTakeContentLiters(spring.Pos, toStore);
+                if (stackStored is not null)
+                {
+                    var props = spring.GetContentProps(spring.Pos);
+                    litresStored = stackStored.StackSize / props.ItemsPerLitre;
+                    if (existing != null) stackStored.StackSize += existing.StackSize;
+
+                    cont.SetContent(ContainerSlot.Itemstack, stackStored);
+                    ContainerSlot.MarkDirty();
+                    MarkDirty();
+
+                    if (litresStored < toStore) toWaste += (toStore - litresStored);
+                }
+                else
+                {
+                    toWaste += toStore;
+                    litresStored = 0;
+                }
+            }
+
+            if (toWaste > 0)
+            {
+                litresWasted = -spring.TryChangeVolume(-toWaste);
+            }
+
+            float totalExtracted = litresStored + litresWasted;
+            if (totalExtracted > 0)
+            {
+                var visStack = new ItemStack(spring.WaterItem);
+                if (visStack != null)
+                {
+                    GetSpout(out var spoutPos, out var spoutDir);
+
+                    byte[] stackBytes;
+                    using (var ms = new MemoryStream())
+                    using (var bw = new BinaryWriter(ms))
+                    {
+                        visStack.ToBytes(bw);
+                        stackBytes = ms.ToArray();
+                    }
+                    EmitParticleSprayOverWindow(stackBytes, spoutPos, spoutDir, totalExtracted);
         }
 
 
